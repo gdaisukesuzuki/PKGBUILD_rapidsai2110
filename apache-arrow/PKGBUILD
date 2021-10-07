@@ -1,0 +1,90 @@
+# Maintainer: Bruno Pagani <archange@archlinux.org>
+# Contributor: Guillaume Horel <guillaume.horel@gmail.com>
+
+_pkgname=arrow-apache-arrow
+pkgname=arrow-cuda
+pkgver=5.0.0
+pkgrel=3
+pkgdesc="Columnar in-memory analytics layer for big data."
+arch=(x86_64)
+url="https://arrow.apache.org"
+license=(Apache)
+depends=(boost-libs brotli double-conversion c-ares gflags
+         google-glog libutf8proc lz4 protobuf rapidjson
+         snappy thrift uriparser zstd re2)
+provides=(parquet-cpp arrow)
+conflicts=(parquet-cpp arrow)
+makedepends=(apache-orc boost cmake flatbuffers gmock python-numpy git)
+options=('staticlibs')
+source=(https://github.com/apache/arrow/archive/apache-arrow-${pkgver}.tar.gz
+        git+https://github.com/apache/parquet-testing.git
+        git+https://github.com/apache/arrow-testing.git
+        cc.patch
+)
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP'
+            'SKIP'
+)
+
+prepare(){
+  cd arrow-apache-arrow-${pkgver}
+  # patch -Np1 -i ../arrow-protobuf-3.15-r1.patch
+  patch -p1 < ../cc.patch
+}
+
+build(){
+  GRPC_CPP_PLUGIN=/usr/bin/grpc_cpp_plugin \
+  CUDA_HOME=/opt/cuda \
+  ARROW_BUILD_TOOLCHAIN=/usr \
+  ORC_HOME=/usr \
+  DOUBLE_CONVERSION_HOME=/usr \
+  cmake \
+    -B build -S arrow-apache-arrow-${pkgver}/cpp \
+    -DCMAKE_INSTALL_PREFIX="/usr" \
+    -DCMAKE_INSTALL_LIBDIR="lib" \
+    -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DARROW_DEPENDENCY_SOURCE=SYSTEM \
+    -DARROW_BUILD_TESTS=ON \
+    -DARROW_BUILD_UTILITIES=ON \
+    -DARROW_ALTIVEC=OFF \
+    -DARROW_COMPUTE=ON \
+    -DARROW_FLIGHT=OFF \
+    -DARROW_GANDIVA=OFF \
+    -DARROW_IPC=ON \
+    -DARROW_JEMALLOC=ON \
+    -DARROW_ORC=ON \
+    -DARROW_PARQUET=ON \
+    -DARROW_PLASMA=OFF \
+    -DARROW_PYTHON=ON \
+    -DARROW_TENSORFLOW=ON \
+    -DARROW_SIMD_LEVEL=AVX512 \
+    -DARROW_PROTOBUF_USE_SHARED=ON \
+    -DARROW_GFLAGS_USE_SHARED=ON \
+    -DARROW_USE_GLOG=ON \
+    -DARROW_WITH_ZSTD=ON \
+    -DARROW_WITH_BROTLI=ON \
+    -DARROW_WITH_RE2=ON \
+    -DARROW_WITH_SNAPPY=ON \
+    -DARROW_DATASET=ON \
+    -DARROW_JSON=ON \
+    -DARROW_CSV=ON \
+    -DARROW_CUDA=ON
+# sed -i -e 's/GRPC_CPP_PLUGIN-NOTFOUND/\/usr\/bin\/grpc_cpp_plugin/g' ./src/arrow/flight/CMakeFiles/flight_grpc_gen.dir/build.make
+# sed -i -e 's/GRPC_CPP_PLUGIN-NOTFOUND/\/usr\/bin\/grpc_cpp_plugin/g' build/src/arrow/flight/CMakeFiles/flight_grpc_gen.dir/build.make
+
+ DESTDIR="${pkgdir}" 
+  make -C build -j15
+}
+
+# check(){
+#   PARQUET_TEST_DATA="${srcdir}"/parquet-testing/data \
+#   ARROW_TEST_DATA="${srcdir}"/arrow-testing/data \
+#   make -C build test
+#}
+
+package(){
+  make -C build DESTDIR="${pkgdir}" install
+  find "${pkgdir}"/usr/lib/ -name '*testing*' -delete
+}

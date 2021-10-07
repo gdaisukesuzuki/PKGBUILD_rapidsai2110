@@ -1,0 +1,40 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-dask-cuda)
+_pkgname=dask-cuda
+_pkgver=21.08.00
+pkgver=21.10
+pkgrel=1
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+
+depends=('cuda' 'cmake' 'python-numba' 'python-dask' 'python-distributed')
+# source=("${_pkgname}::git+https://github.com/rapidsai/dask-cuda.git")
+source=("${_pkgname}::git+https://github.com/rapidsai/dask-cuda.git#tag=v21.10.00")
+
+
+sha256sums=('SKIP')
+
+
+build() {
+
+  cd "${srcdir}"/dask-cuda
+  #export LD_LIBRARY_PATH=/usr/lib:/opt/cuda/lib64:/opt/cuda/extras/CUPTI/lib64:/opt/magma/lib
+  #export PATH=/opt/cuda:$PATH
+  #export NVCC=/opt/cuda/bin/nvcc
+  # CUDA_HOME=/opt/cuda python setup.py build_ext --inplace
+}
+
+package() {
+  cd "${srcdir}"/dask-cuda
+  export LD_LIBRARY_PATH=/opt/cuda/lib64:$LD_LIBRARY_PATH
+  CMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+  CUDA_HOME=/opt/cuda python setup.py install --prefix=/usr --root="${pkgdir}" --optimize=1
+}
+
+# vim:set ts=2 sw=2 et:
