@@ -1,0 +1,65 @@
+# Maintainer: Gustavo Alvarez <sl1pkn07@gmail.com>
+
+pkgbase=libcutensor
+pkgname=('libcutensor'
+         'libcutensor-common'
+         )
+pkgver=1.3.3
+_pkgver=1.3.3
+_pkg_file_name="libcutensor-linux-x86_64-${pkgver}.2-archive.tar.xz"
+pkgrel=1
+pkgdesc="GPU-accelerated tensor linear algebra library"
+arch=('x86_64')
+url='https://developer.nvidia.com/cutensor'
+license=('custom:NVIDIA')
+
+_DOWNLOADS_DIR=`xdg-user-dir DOWNLOAD`
+if [ ! -f ${PWD}/${_pkg_file_name} ]; then
+  if [ -f $_DOWNLOADS_DIR/${_pkg_file_name} ]; then
+    ln -sfn $_DOWNLOADS_DIR/${_pkg_file_name} ${PWD}
+  else
+    msg2 ""
+    msg2 "The package can be downloaded here: "
+    msg2 "Please remember to put a downloaded package ${_pkg_file_name} into the build directory ${PWD} or $_DOWNLOADS_DIR"
+    msg2 ""
+  fi
+fi
+
+source=("https://developer.download.nvidia.com/compute/cutensor/redist/libcutensor/linux-x86_64/${_pkg_file_name}")
+sha256sums=('SKIP')
+
+_create_links() {
+  # create soname links
+  for _lib in $(find "${pkgdir}" -name '*.so*'); do
+    _soname=$(dirname "${_lib}")/$(readelf -d "${_lib}" | grep -Po 'SONAME.*: \[\K[^]]*' || true)
+    _base=$(echo ${_soname} | sed -r 's/(.*).so.*/\1.so/')
+    [[ -e "${_soname}" ]] || ln -s $(basename "${_lib}") "${_soname}"
+    [[ -e "${_base}" ]] || ln -s $(basename "${_soname}") "${_base}"
+  done
+}
+
+package_libcutensor() {
+  depends=('gcc-libs'
+           'cuda'
+           'libcutensor-common'
+           )
+  cd libcutensor-linux-x86_64-1.3.3.2-archive
+  install -Dm644 "lib/11/libcutensor_static.a" "${pkgdir}/opt/cuda/targets/x86_64-linux/lib/libcutensor_static.a"
+  install -Dm755 "lib/11/libcutensor.so.${pkgver//.5/}" "${pkgdir}/opt/cuda/targets/x86_64-linux/lib/libcutensor.so.${pkgver//.5/}"
+
+  _create_links
+
+  install -d "${pkgdir}/usr/share/licenses/${pkgname}"
+  ln -sf "/usr/share/licenses/libcutensor-common/LICENSE"  "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
+
+
+package_libcutensor-common() {
+  pkgdesc="GPU-accelerated tensor linear algebra library (Common bits)"
+  arch=('any')
+
+  cd libcutensor-linux-x86_64-1.3.3.2-archive
+  for i in $(find include -type f); do install -Dm644 ${i} "${pkgdir}/opt/cuda/targets/x86_64-linux/${i}"; done
+
+  install -Dm644 LICENSE  "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
