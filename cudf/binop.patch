@@ -1,0 +1,853 @@
+*** cudf/cpp/src/binaryop/binaryop.cpp-dist	2021-09-03 16:31:10.537800991 +0900
+--- cudf/cpp/src/binaryop/binaryop.cpp	2021-09-06 00:07:54.973187449 +0900
+***************
+*** 47,55 ****
+  #include <thrust/optional.h>
+  
+  namespace cudf {
+- 
+  namespace binops {
+- namespace detail {
+  
+  /**
+   * @brief Computes output valid mask for op between a column and a scalar
+--- 47,53 ----
+***************
+*** 69,75 ****
+      return rmm::device_buffer{0, stream, mr};
+    }
+  }
+! }  // namespace detail
+  
+  namespace jit {
+  
+--- 67,129 ----
+      return rmm::device_buffer{0, stream, mr};
+    }
+  }
+! 
+! /**
+!  * @brief Does the binop need to know if an operand is null/invalid to perform special
+!  * processing?
+!  */
+! inline bool is_null_dependent(binary_operator op)
+! {
+!   return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
+!          op == binary_operator::NULL_MAX;
+! }
+! 
+! /**
+!  * @brief Returns `true` if `binary_operator` `op` is a basic arithmetic binary operation
+!  */
+! bool is_basic_arithmetic_binop(binary_operator op)
+! {
+!   return op == binary_operator::ADD or       // operator +
+!          op == binary_operator::SUB or       // operator -
+!          op == binary_operator::MUL or       // operator *
+!          op == binary_operator::DIV or       // operator / using common type of lhs and rhs
+!          op == binary_operator::NULL_MIN or  // 2 null = null, 1 null = value, else min
+!          op == binary_operator::NULL_MAX;    // 2 null = null, 1 null = value, else max
+! }
+! 
+! /**
+!  * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
+!  */
+! bool is_comparison_binop(binary_operator op)
+! {
+!   return op == binary_operator::EQUAL or          // operator ==
+!          op == binary_operator::NOT_EQUAL or      // operator !=
+!          op == binary_operator::LESS or           // operator <
+!          op == binary_operator::GREATER or        // operator >
+!          op == binary_operator::LESS_EQUAL or     // operator <=
+!          op == binary_operator::GREATER_EQUAL or  // operator >=
+!          op == binary_operator::NULL_EQUALS;      // 2 null = true; 1 null = false; else ==
+! }
+! 
+! /**
+!  * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
+!  */
+! bool is_supported_fixed_point_binop(binary_operator op)
+! {
+!   return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
+! }
+! 
+! /**
+!  * @brief Helper predicate function that identifies if `op` requires scales to be the same
+!  *
+!  * @param op `binary_operator`
+!  * @return true `op` requires scales of lhs and rhs to be the same
+!  * @return false `op` does not require scales of lhs and rhs to be the same
+!  */
+! bool is_same_scale_necessary(binary_operator op)
+! {
+!   return op != binary_operator::MUL && op != binary_operator::DIV;
+! }
+  
+  namespace jit {
+  
+***************
+*** 208,215 ****
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
+  }
+- 
+  }  // namespace jit
+  }  // namespace binops
+  
+  namespace detail {
+--- 262,308 ----
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
+  }
+  }  // namespace jit
++ 
++ // Compiled Binary operation
++ namespace compiled {
++ /**
++  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
++  * binary_operator, data_type, rmm::mr::device_memory_resource*)
++  *
++  * @param stream CUDA stream used for device memory operations and kernel launches.
++  */
++ template <typename LhsType, typename RhsType>
++ std::unique_ptr<column> binary_operation(LhsType const& lhs,
++                                          RhsType const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::cuda_stream_view stream,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
++     CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
++ 
++   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
++       output_type.id() == type_id::STRING and
++       (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
++     return cudf::binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
++ 
++   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
++     CUDF_FAIL("Unsupported operator for these types");
++ 
++   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
++ 
++   if constexpr (std::is_same_v<LhsType, column_view>)
++     if (lhs.is_empty()) return out;
++   if constexpr (std::is_same_v<RhsType, column_view>)
++     if (rhs.is_empty()) return out;
++ 
++   auto out_view = out->mutable_view();
++   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
++   return out;
++ }
++ }  // namespace compiled
+  }  // namespace binops
+  
+  namespace detail {
+***************
+*** 245,251 ****
+    if (binops::is_null_dependent(op)) {
+      return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+!     auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+      return make_fixed_width_column(
+        output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+--- 338,344 ----
+    if (binops::is_null_dependent(op)) {
+      return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+!     auto new_mask = binops::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+      return make_fixed_width_column(
+        output_type, rhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+***************
+*** 272,278 ****
+    if (binops::is_null_dependent(op)) {
+      return make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+!     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+      return make_fixed_width_column(
+        output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+--- 365,371 ----
+    if (binops::is_null_dependent(op)) {
+      return make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
+    } else {
+!     auto new_mask = binops::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+      return make_fixed_width_column(
+        output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    }
+***************
+*** 305,357 ****
+    }
+  };
+  
+- /**
+-  * @brief Returns `true` if `binary_operator` `op` is a basic arithmetic binary operation
+-  */
+- bool is_basic_arithmetic_binop(binary_operator op)
+- {
+-   return op == binary_operator::ADD or       // operator +
+-          op == binary_operator::SUB or       // operator -
+-          op == binary_operator::MUL or       // operator *
+-          op == binary_operator::DIV or       // operator / using common type of lhs and rhs
+-          op == binary_operator::NULL_MIN or  // 2 null = null, 1 null = value, else min
+-          op == binary_operator::NULL_MAX;    // 2 null = null, 1 null = value, else max
+- }
+- 
+- /**
+-  * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
+-  */
+- bool is_comparison_binop(binary_operator op)
+- {
+-   return op == binary_operator::EQUAL or          // operator ==
+-          op == binary_operator::NOT_EQUAL or      // operator !=
+-          op == binary_operator::LESS or           // operator <
+-          op == binary_operator::GREATER or        // operator >
+-          op == binary_operator::LESS_EQUAL or     // operator <=
+-          op == binary_operator::GREATER_EQUAL or  // operator >=
+-          op == binary_operator::NULL_EQUALS;      // 2 null = true; 1 null = false; else ==
+- }
+- 
+- /**
+-  * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
+-  */
+- bool is_supported_fixed_point_binop(binary_operator op)
+- {
+-   return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
+- }
+- 
+- /**
+-  * @brief Helper predicate function that identifies if `op` requires scales to be the same
+-  *
+-  * @param op `binary_operator`
+-  * @return true `op` requires scales of lhs and rhs to be the same
+-  * @return false `op` does not require scales of lhs and rhs to be the same
+-  */
+- bool is_same_scale_necessary(binary_operator op)
+- {
+-   return op != binary_operator::MUL && op != binary_operator::DIV;
+- }
+- 
+  template <typename Lhs, typename Rhs>
+  void fixed_point_binary_operation_validation(binary_operator op,
+                                               Lhs lhs,
+--- 398,403 ----
+***************
+*** 360,369 ****
+  {
+    CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
+    CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+!   CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
+    CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
+    if (output_type.has_value()) {
+!     if (is_comparison_binop(op))
+        CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                     "Comparison operations require boolean output type.");
+      else
+--- 406,416 ----
+  {
+    CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
+    CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+!   CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
+!                "Unsupported fixed_point binary operation");
+    CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
+    if (output_type.has_value()) {
+!     if (binops::is_comparison_binop(op))
+        CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                     "Comparison operations require boolean output type.");
+      else
+***************
+*** 372,377 ****
+--- 419,425 ----
+    }
+  }
+  
++ namespace jit {
+  /**
+   * @brief Function to compute binary operation of one `column_view` and one `scalar`
+   *
+***************
+*** 397,408 ****
+      return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+  
+    auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+!   auto const type =
+!     is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{rhs.type().id(), scale};
+!   auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+!   auto out_view = out->mutable_view();
+  
+!   if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
+      // Adjust scalar/column so they have they same scale
+      if (rhs.type().scale() < lhs.type().scale()) {
+        auto const diff = lhs.type().scale() - rhs.type().scale();
+--- 445,456 ----
+      return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+  
+    auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+!   auto const type  = binops::is_comparison_binop(op) ? data_type{type_id::BOOL8}
+!                                                      : cudf::data_type{rhs.type().id(), scale};
+!   auto out         = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+!   auto out_view    = out->mutable_view();
+  
+!   if (lhs.type().scale() != rhs.type().scale() && binops::is_same_scale_necessary(op)) {
+      // Adjust scalar/column so they have they same scale
+      if (rhs.type().scale() < lhs.type().scale()) {
+        auto const diff = lhs.type().scale() - rhs.type().scale();
+***************
+*** 467,478 ****
+      return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+  
+    auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+!   auto const type =
+!     is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{lhs.type().id(), scale};
+!   auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+!   auto out_view = out->mutable_view();
+  
+!   if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
+      // Adjust scalar/column so they have they same scale
+      if (rhs.type().scale() > lhs.type().scale()) {
+        auto const diff = rhs.type().scale() - lhs.type().scale();
+--- 515,526 ----
+      return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+  
+    auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+!   auto const type  = binops::is_comparison_binop(op) ? data_type{type_id::BOOL8}
+!                                                      : cudf::data_type{lhs.type().id(), scale};
+!   auto out         = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
+!   auto out_view    = out->mutable_view();
+  
+!   if (lhs.type().scale() != rhs.type().scale() && binops::is_same_scale_necessary(op)) {
+      // Adjust scalar/column so they have they same scale
+      if (rhs.type().scale() > lhs.type().scale()) {
+        auto const diff = rhs.type().scale() - lhs.type().scale();
+***************
+*** 587,594 ****
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return experimental::binary_operation(lhs, rhs, op, output_type, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+--- 635,643 ----
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
++   // calls compiled ops for string types
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+***************
+*** 614,621 ****
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return experimental::binary_operation(lhs, rhs, op, output_type, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+--- 663,671 ----
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+  {
++   // calls compiled ops for string types
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+***************
+*** 643,650 ****
+  {
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+  
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return experimental::binary_operation(lhs, rhs, op, output_type, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+--- 693,701 ----
+  {
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+  
++   // calls compiled ops for string types
+    if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+!     return detail::binary_operation(lhs, rhs, op, output_type, stream, mr);
+  
+    if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+      return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+***************
+*** 662,667 ****
+--- 713,784 ----
+    binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
+    return out;
+  }
++ }  // namespace jit
++ }  // namespace detail
++ 
++ namespace jit {
++ std::unique_ptr<column> binary_operation(scalar const& lhs,
++                                          column_view const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   CUDF_FUNC_RANGE();
++   return detail::jit::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
++ 
++ std::unique_ptr<column> binary_operation(column_view const& lhs,
++                                          scalar const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   CUDF_FUNC_RANGE();
++   return detail::jit::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
++ 
++ std::unique_ptr<column> binary_operation(column_view const& lhs,
++                                          column_view const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   CUDF_FUNC_RANGE();
++   return detail::jit::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
++ }  // namespace jit
++ 
++ namespace detail {
++ std::unique_ptr<column> binary_operation(scalar const& lhs,
++                                          column_view const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::cuda_stream_view stream,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   return binops::compiled::binary_operation<scalar, column_view>(
++     lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
++ std::unique_ptr<column> binary_operation(column_view const& lhs,
++                                          scalar const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::cuda_stream_view stream,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   return binops::compiled::binary_operation<column_view, scalar>(
++     lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
++ std::unique_ptr<column> binary_operation(column_view const& lhs,
++                                          column_view const& rhs,
++                                          binary_operator op,
++                                          data_type output_type,
++                                          rmm::cuda_stream_view stream,
++                                          rmm::mr::device_memory_resource* mr)
++ {
++   return binops::compiled::binary_operation<column_view, column_view>(
++     lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
++ }
+  
+  std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                           column_view const& rhs,
+***************
+*** 693,706 ****
+    binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+    return out;
+  }
+- 
+  }  // namespace detail
+  
+  int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                             int32_t left_scale,
+                                             int32_t right_scale)
+  {
+!   CUDF_EXPECTS(cudf::detail::is_supported_fixed_point_binop(op),
+                 "Unsupported fixed_point binary operation.");
+    if (op == binary_operator::MUL) return left_scale + right_scale;
+    if (op == binary_operator::DIV) return left_scale - right_scale;
+--- 810,822 ----
+    binops::jit::binary_operation(out_view, lhs, rhs, ptx, stream);
+    return out;
+  }
+  }  // namespace detail
+  
+  int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                             int32_t left_scale,
+                                             int32_t right_scale)
+  {
+!   CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
+                 "Unsupported fixed_point binary operation.");
+    if (op == binary_operator::MUL) return left_scale + right_scale;
+    if (op == binary_operator::DIV) return left_scale - right_scale;
+***************
+*** 726,732 ****
+    CUDF_FUNC_RANGE();
+    return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+  }
+- 
+  std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                           scalar const& rhs,
+                                           binary_operator op,
+--- 842,847 ----
+***************
+*** 736,742 ****
+    CUDF_FUNC_RANGE();
+    return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+  }
+- 
+  std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                           column_view const& rhs,
+                                           binary_operator op,
+--- 851,856 ----
+***************
+*** 757,834 ****
+    return detail::binary_operation(lhs, rhs, ptx, output_type, rmm::cuda_stream_default, mr);
+  }
+  
+- // Experimental Compiled Binary operation
+- namespace experimental {
+- namespace detail {
+- /**
+-  * @copydoc cudf::experimental::binary_operation(column_view const&, column_view const&,
+-  * binary_operator, data_type, rmm::mr::device_memory_resource*)
+-  *
+-  * @param stream CUDA stream used for device memory operations and kernel launches.
+-  */
+- template <typename LhsType, typename RhsType>
+- std::unique_ptr<column> binary_operation(LhsType const& lhs,
+-                                          RhsType const& rhs,
+-                                          binary_operator op,
+-                                          data_type output_type,
+-                                          rmm::cuda_stream_view stream,
+-                                          rmm::mr::device_memory_resource* mr)
+- {
+-   if constexpr (std::is_same_v<LhsType, column_view> and std::is_same_v<RhsType, column_view>)
+-     CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+- 
+-   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+-       output_type.id() == type_id::STRING and
+-       (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+-     return binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
+- 
+-   if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
+-     CUDF_FAIL("Unsupported operator for these types");
+- 
+-   // TODO check if scale conversion required?
+-   // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+-   //  CUDF_FAIL("Not yet supported fixed_point");
+-   // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+- 
+-   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+- 
+-   if constexpr (std::is_same_v<LhsType, column_view>)
+-     if (lhs.is_empty()) return out;
+-   if constexpr (std::is_same_v<RhsType, column_view>)
+-     if (rhs.is_empty()) return out;
+- 
+-   auto out_view = out->mutable_view();
+-   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+-   return out;
+- }
+- }  // namespace detail
+- 
+- std::unique_ptr<column> binary_operation(scalar const& lhs,
+-                                          column_view const& rhs,
+-                                          binary_operator op,
+-                                          data_type output_type,
+-                                          rmm::mr::device_memory_resource* mr)
+- {
+-   CUDF_FUNC_RANGE();
+-   return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+- }
+- std::unique_ptr<column> binary_operation(column_view const& lhs,
+-                                          scalar const& rhs,
+-                                          binary_operator op,
+-                                          data_type output_type,
+-                                          rmm::mr::device_memory_resource* mr)
+- {
+-   CUDF_FUNC_RANGE();
+-   return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+- }
+- std::unique_ptr<column> binary_operation(column_view const& lhs,
+-                                          column_view const& rhs,
+-                                          binary_operator op,
+-                                          data_type output_type,
+-                                          rmm::mr::device_memory_resource* mr)
+- {
+-   CUDF_FUNC_RANGE();
+-   return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+- }
+- }  // namespace experimental
+  }  // namespace cudf
+--- 871,874 ----
+*** cudf/cpp/src/binaryop/compiled/binary_ops.cu-dist	2021-09-03 16:31:10.537800991 +0900
+--- cudf/cpp/src/binaryop/compiled/binary_ops.cu	2021-09-06 00:09:29.905239806 +0900
+***************
+*** 43,51 ****
+    template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
+    return_type operator()(scalar const& s,
+                           rmm::cuda_stream_view stream,
+!                          rmm::mr::device_memory_resource* mr)
+    {
+!     auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+      auto col_v =
+        column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
+      return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
+--- 43,51 ----
+    template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
+    return_type operator()(scalar const& s,
+                           rmm::cuda_stream_view stream,
+!                          rmm::mr::device_memory_resource*)
+    {
+!     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+      auto col_v =
+        column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
+      return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
+***************
+*** 63,70 ****
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::mr::device_memory_resource* mr)
+  {
+!   using T                 = cudf::string_view;
+!   auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+  
+    // build offsets column from the string size
+    auto offsets_transformer_itr =
+--- 63,70 ----
+                                                              rmm::cuda_stream_view stream,
+                                                              rmm::mr::device_memory_resource* mr)
+  {
+!   using T                  = cudf::string_view;
+!   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+  
+    // build offsets column from the string size
+    auto offsets_transformer_itr =
+***************
+*** 119,129 ****
+  
+    // This is used to compare a scalar and a column value
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE
+!     typename std::enable_if_t<std::is_same<LhsViewT, column_device_view>::value &&
+!                                 !std::is_same<RhsViewT, column_device_view>::value,
+!                               OutT>
+!     operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(i),
+                    rhs_dev_view_.is_valid(),
+--- 119,128 ----
+  
+    // This is used to compare a scalar and a column value
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+!                                                    !std::is_same_v<RhsViewT, column_device_view>,
+!                                                  OutT>
+!   operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(i),
+                    rhs_dev_view_.is_valid(),
+***************
+*** 134,144 ****
+  
+    // This is used to compare a scalar and a column value
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE
+!     typename std::enable_if_t<!std::is_same<LhsViewT, column_device_view>::value &&
+!                                 std::is_same<RhsViewT, column_device_view>::value,
+!                               OutT>
+!     operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(),
+                    rhs_dev_view_.is_valid(i),
+--- 133,142 ----
+  
+    // This is used to compare a scalar and a column value
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
+!                                                    std::is_same_v<RhsViewT, column_device_view>,
+!                                                  OutT>
+!   operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(),
+                    rhs_dev_view_.is_valid(i),
+***************
+*** 149,159 ****
+  
+    // This is used to compare 2 column values
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE
+!     typename std::enable_if_t<std::is_same<LhsViewT, column_device_view>::value &&
+!                                 std::is_same<RhsViewT, column_device_view>::value,
+!                               OutT>
+!     operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(i),
+                    rhs_dev_view_.is_valid(i),
+--- 147,156 ----
+  
+    // This is used to compare 2 column values
+    template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
+!   CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+!                                                    std::is_same_v<RhsViewT, column_device_view>,
+!                                                  OutT>
+!   operator()(cudf::size_type i) const
+    {
+      return cfunc_(lhs_dev_view_.is_valid(i),
+                    rhs_dev_view_.is_valid(i),
+***************
+*** 204,210 ****
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr) const
+    {
+-     std::unique_ptr<column> out;
+      // Create device views for inputs
+      auto const lhs_dev_view = get_device_view(lhs);
+      auto const rhs_dev_view = get_device_view(rhs);
+--- 201,206 ----
+*** cudf/cpp/src/binaryop/compiled/binary_ops.cuh-dist	2021-09-03 16:31:10.537800991 +0900
+--- cudf/cpp/src/binaryop/compiled/binary_ops.cuh	2021-09-06 00:09:31.978617411 +0900
+***************
+*** 68,74 ****
+      if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
+                    std::is_constructible_v<Element, FromType>) {
+        col.element<Element>(i) = static_cast<Element>(val);
+!     } else if constexpr (is_fixed_point<Element>() and std::is_constructible_v<Element, FromType>) {
+        if constexpr (is_fixed_point<FromType>())
+          col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
+        else
+--- 68,76 ----
+      if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
+                    std::is_constructible_v<Element, FromType>) {
+        col.element<Element>(i) = static_cast<Element>(val);
+!     } else if constexpr (is_fixed_point<Element>() and
+!                          (is_fixed_point<FromType>() or
+!                           std::is_constructible_v<Element, FromType>)) {
+        if constexpr (is_fixed_point<FromType>())
+          col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
+        else
+*** cudf/cpp/src/binaryop/compiled/binary_ops.hpp-dist	2021-09-03 16:31:10.537800991 +0900
+--- cudf/cpp/src/binaryop/compiled/binary_ops.hpp	2021-09-06 00:09:34.892012913 +0900
+***************
+*** 29,54 ****
+  class mutable_column_device_view;
+  
+  namespace binops {
+- namespace detail {
+- /**
+-  * @brief Computes output valid mask for op between a column and a scalar
+-  */
+- rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
+-                                              scalar const& s,
+-                                              rmm::cuda_stream_view stream,
+-                                              rmm::mr::device_memory_resource* mr);
+- }  // namespace detail
+- 
+- /**
+-  * @brief Does the binop need to know if an operand is null/invalid to perform special
+-  * processing?
+-  */
+- inline bool is_null_dependent(binary_operator op)
+- {
+-   return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
+-          op == binary_operator::NULL_MAX;
+- }
+- 
+  namespace compiled {
+  
+  std::unique_ptr<column> string_null_min_max(
+--- 29,34 ----
+***************
+*** 132,139 ****
+   *
+   * @note The sizes of @p lhs and @p rhs should be the same
+   *
+!  * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i <
+!  * lhs.size()
+   *
+   * Regardless of the operator, the validity of the output value is the logical
+   * AND of the validity of the two operands
+--- 112,118 ----
+   *
+   * @note The sizes of @p lhs and @p rhs should be the same
+   *
+!  * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
+   *
+   * Regardless of the operator, the validity of the output value is the logical
+   * AND of the validity of the two operands
+*** cudf/cpp/src/binaryop/compiled/util.cpp-dist	2021-09-03 16:31:10.537800991 +0900
+--- cudf/cpp/src/binaryop/compiled/util.cpp	2021-09-06 00:09:46.265588537 +0900
+***************
+*** 21,26 ****
+--- 21,28 ----
+  #include <cudf/utilities/traits.hpp>
+  #include <cudf/utilities/type_dispatcher.hpp>
+  
++ #include <optional>
++ 
+  namespace cudf::binops::compiled {
+  
+  namespace {
+***************
+*** 87,93 ****
+          using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+          if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
+            using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
+!           return std::is_constructible_v<TypeOut, ReturnType>;
+          }
+        } else {
+          if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+--- 89,96 ----
+          using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+          if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
+            using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
+!           return std::is_constructible_v<TypeOut, ReturnType> or
+!                  (is_fixed_point<ReturnType>() and is_fixed_point<TypeOut>());
+          }
+        } else {
+          if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+*** cudf/cpp/src/binaryop/jit/traits.hpp-dist	2021-09-06 00:13:59.124164433 +0900
+--- cudf/cpp/src/binaryop/jit/traits.hpp	2021-09-06 00:23:16.055115392 +0900
+***************
+*** 40,57 ****
+  constexpr bool isFloat = false;
+  
+  template <typename T>
+! constexpr bool is_timestamp_v = cuda::std::is_same<cudf::timestamp_D, T>::value ||
+!                                 cuda::std::is_same<cudf::timestamp_s, T>::value ||
+!                                 cuda::std::is_same<cudf::timestamp_ms, T>::value ||
+!                                 cuda::std::is_same<cudf::timestamp_us, T>::value ||
+!                                 cuda::std::is_same<cudf::timestamp_ns, T>::value;
+  
+  template <typename T>
+! constexpr bool is_duration_v = cuda::std::is_same<cudf::duration_D, T>::value ||
+!                                cuda::std::is_same<cudf::duration_s, T>::value ||
+!                                cuda::std::is_same<cudf::duration_ms, T>::value ||
+!                                cuda::std::is_same<cudf::duration_us, T>::value ||
+!                                cuda::std::is_same<cudf::duration_ns, T>::value;
+  
+  template <typename T>
+  constexpr bool is_chrono_v = is_timestamp_v<T> || is_duration_v<T>;
+--- 40,55 ----
+  constexpr bool isFloat = false;
+  
+  template <typename T>
+! constexpr bool is_timestamp_v =
+!   cuda::std::is_same_v<cudf::timestamp_D, T> || cuda::std::is_same_v<cudf::timestamp_s, T> ||
+!   cuda::std::is_same_v<cudf::timestamp_ms, T> || cuda::std::is_same_v<cudf::timestamp_us, T> ||
+!   cuda::std::is_same_v<cudf::timestamp_ns, T>;
+  
+  template <typename T>
+! constexpr bool is_duration_v =
+!   cuda::std::is_same_v<cudf::duration_D, T> || cuda::std::is_same_v<cudf::duration_s, T> ||
+!   cuda::std::is_same_v<cudf::duration_ms, T> || cuda::std::is_same_v<cudf::duration_us, T> ||
+!   cuda::std::is_same_v<cudf::duration_ns, T>;
+  
+  template <typename T>
+  constexpr bool is_chrono_v = is_timestamp_v<T> || is_duration_v<T>;

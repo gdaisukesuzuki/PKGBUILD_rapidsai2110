@@ -1,0 +1,63 @@
+*** rmm/python/setup.py.orig	2021-09-23 22:17:00.663931083 +0900
+--- rmm/python/setup.py	2021-09-23 22:20:30.727894334 +0900
+***************
+*** 135,141 ****
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+--- 135,141 ----
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart", "fmt", "spdlog"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+***************
+*** 149,155 ****
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+--- 149,155 ----
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart", "fmt", "spdlog"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+***************
+*** 163,169 ****
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+--- 163,169 ----
+              cuda_lib_dir,
+              os.path.join(os.sys.prefix, "lib"),
+          ],
+!         libraries=["cuda", "cudart", "fmt", "spdlog"],
+          language="c++",
+          extra_compile_args=["-std=c++17"],
+      ),
+***************
+*** 232,237 ****
+--- 232,238 ----
+          "Programming Language :: Python",
+          "Programming Language :: Python :: 3.7",
+          "Programming Language :: Python :: 3.8",
++         "Programming Language :: Python :: 3.9",
+      ],
+      # Include the separately-compiled shared library
+      setup_requires=["Cython>=0.29,<0.30"],

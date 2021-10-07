@@ -1,0 +1,138 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(cudf)
+_pkgname=cudf
+# pkgver=0.19.2
+pkgver=21.10
+_pkgver=21.08.02
+# _pkgver=0.19.2
+pkgrel=1
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+# depends=('arrow-cuda>=3.0.0' 'nccl' 'cuda' 'cmake' 'boost-libs'  'protobuf' )
+# depends=('nccl' 'cuda' 'cmake' 'boost-libs')
+depends=('arrow-cuda'  'nccl' 'cuda' 'cmake' 'boost-libs')
+# depends=('arrow-cuda' 'rmm' 'nccl' 'cuda' 'cmake' 'boost-libs')
+# depends=('arrow-cuda>=1.0.0' 'nccl' 'cuda' 'cmake' 'rmm' 'dlpack' 'boost-libs'  'protobuf' )
+provides=('cudf' 'rmm')
+# provides=('cudf' )
+# depends=('arrow-cuda>=1.0.0' 'nccl' 'cuda' 'cuda-tools' 'cuda-static' 'cmake' 'python-rmm' 'dlpack' 'boost-libs'  'protobuf' )
+# depends=('arrow-cuda<1.0.0' 'python-pyarrow-cuda' 'gcc9' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs' 'python-dask'  'python-distributed' 'protobuf' 'python-versioneer')
+# depends=('arrow-cudf<0.16.0' 'gcc8' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs' 'python-dask'  'python-distributed' 'protobuf')
+# makedepends=('python-cmake_setuptools' 'protobuf-static')
+# depends=('arrow-cudf<0.16.0' 'gcc8' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs')
+# source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git#branch=branch-${_pkgver}"
+# source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git"
+# source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git#branch=branch-${_pkgver}"
+source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git#tag=v21.10.00"
+ "cu.patch"
+ "cc.patch"
+ "cmake.patch"
+# "https://anaconda.org/rapidsai/libcudf/21.08.02/download/linux-64/libcudf-21.08.02-cuda11.4_gf6d31fa95d_0.tar.bz2"
+# "build.sh.patch"
+  "bench.patch"
+  "binop.patch"
+)
+#  "orc.hpp.patch"
+#  "remove_keys.cu.patch"
+#  "from.arrow.cu.patch"
+#  "cudf_setup.py.patch" "gather.cu.patch" "ipc.cpp.patch" "reader_impl.cu.patch")
+#  "cudf_setup.py.patch" "nvst_CMakeLists.txt.patch")
+#  "from_arrow.cpp.patch"
+
+# sha256sums=('SKIP' 'SKIP')
+# sha256sums=('SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+options=('staticlibs')
+
+
+prepare() {
+  cd "${srcdir}"/cudf
+git submodule update --init --recursive
+  cd "${srcdir}"
+  patch -p0 < cu.patch
+ patch -p0 < cc.patch
+# patch -p0 < binop.patch
+#  patch -p0 < build.sh.patch
+  patch -p0 < cmake.patch
+#   patch -p0 < nvst_CMakeLists.txt.patch
+#   patch -p0 < gather.cu.patch 
+#   patch -p0 < orc.hpp.patch 
+#  patch -p0 < cpp.patch
+#  patch -p0 < cudf_setup.py.patch
+#  patch -p0 < from_arrow.cpp.patch
+#   patch -p0 < reader_impl.cu.patch
+#   patch -p0 <  from.arrow.cu.patch
+#    patch -p0 < ipc.cpp.patch
+export CC=/usr/bin/gcc
+export CXX=/usr/bin/g++
+    export SNAPPY_INCLUDE_DIRS=/usr/include
+    export OPENSSL_ROOT_DIR=/usr
+}
+
+build() {
+  cd "${srcdir}/cudf"
+#    ./build.sh clean
+#  ./build.sh --disable_nvtx -v -n libcudf cudf dask_cudf
+# PARALLEL_LEVEL=3 ./build.sh -v -n libcudf 
+#  -DCMAKE_CXX_STANDARD="14" \
+#  -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+#  -DCMAKE_CXX_EXTENSIONS=OFF \ 
+
+    cmake -S "${srcdir}"/cudf/cpp -B "${srcdir}"/cudf/cpp/build \
+          -DCMAKE_INSTALL_PREFIX="/usr" \
+          -DCMAKE_CUDA_ARCHITECTURES= \
+          -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+          -DCMAKE_C_COMPILER=/usr/bin/gcc \
+          -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+          -DUSE_NVTX=ON \
+          -DBUILD_TESTS=OFF \
+          -DBUILD_BENCHMARKS=OFF \
+          -DDISABLE_DEPRECATION_WARNING=ON \
+         -DCMAKE_CXX_STANDARD=17 \
+          -DPER_THREAD_DEFAULT_STREAM=ON \
+          -DCMAKE_BUILD_TYPE=Release 
+          # -DCUDF_USE_ARROW_STATIC=ON \
+
+    
+    cd "${srcdir}"/cudf/cpp/build
+    # find . -name flags.make | xargs  sed -i -e 's/--generate-code=arch=compute_60,code=\[sm_60\] --generate-code=arch=compute_70,code=\[sm_70\] --generate-code=arch=compute_75,code=\[sm_75\] --generate-code=arch=compute_80,code=\[sm_80\]/--generate-code=arch=compute_86,code=\[sm_86\]/g'
+  cd "${srcdir}"
+
+  # patch -p0 < bench.patch
+
+#  ./build.sh -v -n libcudf # cudf
+#   ./build.sh -v -n libcudf
+#  ./build.sh -v -n libcudf
+
+}
+
+package_cudf() {
+  cd "${srcdir}"/cudf/cpp/build
+
+  # make DESTDIR="${pkgdir}" install_cudf
+  export PARALLEL_LEVEL=16
+  cmake --build . -j$(nproc) --target install DESTDIR="${pkgdir}"  -v
+  # cmake --build . -j1 --target install DESTDIR="${pkgdir}"  -v
+#  cd "${srcdir}"/cudf/python/cudf
+  # CUDA_HOME=/opt/cuda LD_LIBRARY_PATH=/opt/cuda/lib64:${LD_LIBRARY_PATH} python setup.py build_ext -j${PARALLEL_LEVEL:-1} --library-dir=${srcdir}/cudf/cpp/build install --single-version-externally-managed --record=record.txt --prefix=/usr --root="${pkgdir}"
+
+
+  install -Dm644 ${srcdir}/cudf/LICENSE ${pkgdir}/usr/share/licenses/cudf/LICENSE
+  rm -rf ${pkgdir}/usr/lib/cmake/rmm
+  rm -rf ${pkgdir}/usr/include/rmm
+  # rm ${pkgdir}/usr/lib/libcudftestutil.a
+  # install -Dm755 ${srcdir}/lib/libcudf.so ${pkgdir}/usr/lib
+  # install -Dm644 ${srcdir}/lib/libcudftestutil.a ${pkgdir}/usr/lib
+
+}
+
+
+
+
+# vim:set ts=2 sw=2 et:

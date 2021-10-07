@@ -1,0 +1,100 @@
+*** cudf/cpp/src/io/utilities/trie.cuh-dist	2021-06-23 23:07:43.846637246 +0900
+--- cudf/cpp/src/io/utilities/trie.cuh	2021-06-23 23:08:07.004187649 +0900
+***************
+*** 21,26 ****
+--- 21,27 ----
+  
+  #pragma once
+  
++ #include <optional>
+  #include <cudf/utilities/span.hpp>
+  
+  namespace cudf {
+*** cudf/cpp/include/cudf/strings/repeat_strings.hpp-dist	2021-08-17 23:21:03.169854403 +0900
+--- cudf/cpp/include/cudf/strings/repeat_strings.hpp	2021-08-17 23:21:17.910151081 +0900
+***************
+*** 15,20 ****
+--- 15,22 ----
+   */
+  #pragma once
+  
++ #include <optional>
++ 
+  #include <cudf/scalar/scalar.hpp>
+  #include <cudf/strings/strings_column_view.hpp>
+  
+*** cudf/cpp/src/io/utilities/file_io_utilities.hpp-dist	2021-08-17 23:52:07.524876678 +0900
+--- cudf/cpp/src/io/utilities/file_io_utilities.hpp	2021-08-17 23:52:43.828867125 +0900
+***************
+*** 19,28 ****
+--- 19,31 ----
+  #ifdef CUFILE_FOUND
+  #include "thread_pool.hpp"
+  
++ 
+  #include <cufile.h>
+  #include <cudf_test/file_utilities.hpp>
+  #endif
+  
++ #include <future>
++ 
+  #include <rmm/cuda_stream_view.hpp>
+  
+  #include <cudf/io/datasource.hpp>
+*** cudf/cpp/src/io/orc/reader_impl.cu.orig	2021-09-08 10:20:36.041027445 +0900
+--- cudf/cpp/src/io/orc/reader_impl.cu	2021-09-08 15:55:54.491923751 +0900
+***************
+*** 392,398 ****
+  
+          // Coalesce stripe info at the source file later since that makes downstream processing much
+          // easier in impl::read
+!         for (const size_t& stripe_idx : user_specified_stripes[src_file_idx]) {
+            CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
+                         "Invalid stripe index");
+            stripe_infos.push_back(
+--- 392,398 ----
+  
+          // Coalesce stripe info at the source file later since that makes downstream processing much
+          // easier in impl::read
+!         for (long unsigned int stripe_idx : user_specified_stripes[src_file_idx]) {
+            CUDF_EXPECTS(stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size(),
+                         "Invalid stripe index");
+            stripe_infos.push_back(
+***************
+*** 747,754 ****
+      }
+    }
+  
+!   thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+!   thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  
+    if (is_mask_updated) {
+      // Update chunks with pointers to column data which might have been changed.
+--- 747,754 ----
+      }
+    }
+  
+!   thrust::counting_iterator<int, thrust::host_system_tag> col_idx_it(0);
+!   thrust::counting_iterator<int, thrust::host_system_tag> stripe_idx_it(0);
+  
+    if (is_mask_updated) {
+      // Update chunks with pointers to column data which might have been changed.
+***************
+*** 817,824 ****
+  {
+    const auto num_stripes = chunks.size().first;
+    const auto num_columns = chunks.size().second;
+!   thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
+!   thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  
+    // Update chunks with pointers to column data
+    std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
+--- 817,824 ----
+  {
+    const auto num_stripes = chunks.size().first;
+    const auto num_columns = chunks.size().second;
+!   thrust::counting_iterator<int, thrust::host_system_tag> col_idx_it(0);
+!   thrust::counting_iterator<int, thrust::host_system_tag> stripe_idx_it(0);
+  
+    // Update chunks with pointers to column data
+    std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {

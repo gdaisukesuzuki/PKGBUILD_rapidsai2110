@@ -1,0 +1,35 @@
+*** cudf/cpp/src/binaryop/compiled/util.cpp-dist	2021-08-04 21:21:43.879532154 +0900
+--- cudf/cpp/src/binaryop/compiled/util.cpp	2021-08-04 21:22:21.063567838 +0900
+***************
+*** 14,19 ****
+--- 14,20 ----
+   * limitations under the License.
+   */
+  
++ #include <optional>
+  #include "operation.cuh"
+  
+  #include <cudf/binaryop.hpp>
+*** cudf/cpp/src/io/utilities/file_io_utilities.hpp-dist	2021-08-18 21:56:33.497844816 +0900
+--- cudf/cpp/src/io/utilities/file_io_utilities.hpp	2021-08-18 21:59:30.448393796 +0900
+***************
+*** 127,133 ****
+    virtual std::future<size_t> read_async(size_t offset,
+                                           size_t size,
+                                           uint8_t* dst,
+!                                          rmm::cuda_stream_view stream) = 0;
+  };
+  
+  /**
+--- 135,145 ----
+    virtual std::future<size_t> read_async(size_t offset,
+                                           size_t size,
+                                           uint8_t* dst,
+!                                          rmm::cuda_stream_view stream)
+!   {
+!     CUDF_FAIL("read_async must override it.");
+!   }
+! 
+  };
+  
+  /**

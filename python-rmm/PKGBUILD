@@ -1,0 +1,64 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-rmm)
+_pkgname=rmm
+#conflicts=(spdlog)
+# pkgver=0.19.0
+pkgver=21.10
+_pkgver=21.08.01
+#_pkgver=0.19.0
+pkgrel=1
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+# depends=('fmt'  'cython' 'cuda' 'cmake' 'python-numba' 'cudf')
+depends=( 'rmm' 'cython' 'python-setuptools' 'python-numba' )
+# depends=('spdlog' 'cython' 'cuda' 'cmake' 'python-numba' 'fmt')
+# depends=('gcc9' 'cython' 'cuda' 'cmake' 'python-numba' 'spdlog')
+# source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git")
+# source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git#branch=branch-${_pkgver}"
+source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git#tag=v21.10.00"
+
+     "rmm.patch"
+  )
+
+# sha256sums=('SKIP')
+sha256sums=('SKIP' 'SKIP')
+
+build() {
+  patch -p0 < rmm.patch
+  cd "${srcdir}/rmm"
+
+
+#  git submodule update --init --remote --recursive
+
+#  ./build.sh -v -n rmm
+}
+
+package() {
+#  cd "${srcdir}"/rmm/build
+#  make DESTDIR="${pkgdir}" install
+#  mkdir -p ${pkgdir}/usr/lib
+#  cd "${srcdir}"/rmm/build
+#  mkdir -p ${pkgdir}/usr/lib/pkgconfig
+#  mkdir -p ${pkgdir}/usr/include
+#  cd "${srcdir}"/rmm
+#  cp -pr include/rmm ${pkgdir}/usr/include
+
+  cd "${srcdir}"/rmm/python
+  export LD_LIBRARY_PATH=/opt/cuda/lib64:${srcdir}/rmm/build:$LD_LIBRARY_PATH
+    CMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+    python setup.py install --single-version-externally-managed --prefix=/usr --root="${pkgdir}"  --optimize=1  # --skip-build
+
+
+#  mkdir -p ${pkgdir}/usr/include
+
+  install -Dm644 ${srcdir}/rmm/LICENSE ${pkgdir}/usr/share/licenses/python-rmm/LICENSE
+  rm -rf ${pkgdir}/home
+}
+
+# vim:set ts=2 sw=2 et:

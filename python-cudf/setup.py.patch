@@ -1,0 +1,55 @@
+*** cudf/python/cudf/setup.py-dist	2021-05-17 09:13:50.741432009 +0900
+--- cudf/python/cudf/setup.py	2021-05-17 09:15:47.600602384 +0900
+***************
+*** 189,195 ****
+                  cuda_lib_dir,
+              ]
+          ),
+!         libraries=["cudart", "cudf"] + pa.get_libraries() + ["arrow_cuda"],
+          language="c++",
+          extra_compile_args=["-std=c++14"],
+      )
+--- 189,195 ----
+                  cuda_lib_dir,
+              ]
+          ),
+!         libraries=["cudart", "cudf"] + pa.get_libraries() + ["arrow_cuda"] + ["spdlog", "fmt"],
+          language="c++",
+          extra_compile_args=["-std=c++14"],
+      )
+*** cudf/python/cudf/cudf/testing/dataset_generator.py-dist	2021-09-29 08:52:55.440729451 +0900
+--- cudf/python/cudf/cudf/testing/dataset_generator.py	2021-09-29 08:53:18.520942596 +0900
+***************
+*** 419,425 ****
+                          cardinality=cardinality,
+                          null_frequency=null_frequency,
+                          generator=lambda cardinality=cardinality: [
+!                             mimesis.random.random.schoice(
+                                  string.printable,
+                                  meta.get("max_string_length", 1000),
+                              )
+--- 419,425 ----
+                          cardinality=cardinality,
+                          null_frequency=null_frequency,
+                          generator=lambda cardinality=cardinality: [
+!                             mimesis.random.random.generate_string(
+                                  string.printable,
+                                  meta.get("max_string_length", 1000),
+                              )
+***************
+*** 580,586 ****
+          values = float_generator(dtype=dtype, size=cardinality)()
+      elif dtype.kind in ("U", "O"):
+          values = [
+!             mimesis.random.random.schoice(string.printable, 100,)
+              for _ in range(cardinality)
+          ]
+      elif dtype.kind == "M":
+--- 580,586 ----
+          values = float_generator(dtype=dtype, size=cardinality)()
+      elif dtype.kind in ("U", "O"):
+          values = [
+!             mimesis.random.random.generate_string(string.printable, 100,)
+              for _ in range(cardinality)
+          ]
+      elif dtype.kind == "M":

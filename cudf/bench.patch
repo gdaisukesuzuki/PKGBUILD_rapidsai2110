@@ -1,0 +1,12 @@
+*** cudf/cpp/build/_deps/benchmark-src/src/benchmark_register.h-dist	2021-08-18 09:24:07.329781586 +0900
+--- cudf/cpp/build/_deps/benchmark-src/src/benchmark_register.h	2021-08-18 09:24:21.173382745 +0900
+***************
+*** 2,7 ****
+--- 2,8 ----
+  #define BENCHMARK_REGISTER_H
+  
+  #include <vector>
++ #include <limits>
+  
+  #include "check.h"
+  
