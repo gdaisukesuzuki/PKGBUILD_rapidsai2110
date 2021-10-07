@@ -1,0 +1,49 @@
+*** cupy/cupy_backends/cupy_cugraph.h-dist	2021-09-24 17:17:24.025789928 +0900
+--- cupy/cupy_backends/cupy_cugraph.h	2021-09-24 17:17:46.402931293 +0900
+***************
+*** 9,19 ****
+  
+  #elif !defined(CUPY_NO_CUDA)
+  
+! #include <algorithms.hpp>
+  
+  // The following header file is available since version 0.19.0
+! #if __has_include(<version_config.hpp>)
+! #include <version_config.hpp>
+  #else
+  #warning <version_config.hpp> is not found
+  #define CUGRAPH_VERSION_MAJOR 0
+--- 9,19 ----
+  
+  #elif !defined(CUPY_NO_CUDA)
+  
+! #include <cugraph/algorithms.hpp>
+  
+  // The following header file is available since version 0.19.0
+! #if __has_include(<cugraph/version_config.hpp>)
+! #include <cugraph/version_config.hpp>
+  #else
+  #warning <version_config.hpp> is not found
+  #define CUGRAPH_VERSION_MAJOR 0
+*** cupy/cupy_backends/stub/cupy_cugraph.h-dist	2021-09-24 20:41:30.463378689 +0900
+--- cupy/cupy_backends/stub/cupy_cugraph.h	2021-09-24 20:49:42.985491688 +0900
+***************
+*** 20,25 ****
+--- 20,26 ----
+      CUGRAPH_STRONG
+  } cugraph_cc_t;
+  
++ namespace legacy {
+  template <typename VT, typename ET, typename WT>
+  class GraphViewBase {
+  };
+***************
+*** 35,40 ****
+--- 36,42 ----
+      GraphCSRView(ET *, VT *, WT *, VT, ET) {}
+  };
+  
++ }
+  template <typename VT, typename ET, typename WT>
+  void connected_components(GraphCSRView<VT, ET, WT> const &graph,
+                            cugraph_cc_t connect_type, VT *labels);

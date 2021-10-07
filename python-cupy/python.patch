@@ -1,0 +1,41 @@
+*** cupy/cupy_backends/cuda/libs/cugraph.pyx-dist	2021-09-24 17:00:54.325143447 +0900
+--- cupy/cupy_backends/cuda/libs/cugraph.pyx	2021-09-24 20:48:14.030662686 +0900
+***************
+*** 2,13 ****
+  
+  from libc.stdint cimport uintptr_t
+  
+! cdef extern from '../../cupy_cugraph.h' namespace 'cugraph':
+! 
+!     ctypedef enum cugraph_cc_t:
+!         CUGRAPH_WEAK "cugraph::cugraph_cc_t::CUGRAPH_WEAK"
+!         CUGRAPH_STRONG "cugraph::cugraph_cc_t::CUGRAPH_STRONG"
+!         NUM_CONNECTIVITY_TYPES "cugraph::cugraph_cc_t::NUM_CONNECTIVITY_TYPES"
+  
+      cdef cppclass GraphViewBase[VT, ET, WT]:
+          GraphViewBase(WT*, VT, ET)
+--- 2,8 ----
+  
+  from libc.stdint cimport uintptr_t
+  
+! cdef extern from '../../cupy_cugraph.h' namespace 'cugraph::legacy':
+  
+      cdef cppclass GraphViewBase[VT, ET, WT]:
+          GraphViewBase(WT*, VT, ET)
+***************
+*** 22,27 ****
+--- 17,30 ----
+          GraphCSRView()
+          GraphCSRView(const ET *, const VT *, const WT *, size_t, size_t)
+  
++ 
++ cdef extern from '../../cupy_cugraph.h' namespace 'cugraph':
++ 
++     ctypedef enum cugraph_cc_t:
++         CUGRAPH_WEAK "cugraph::cugraph_cc_t::CUGRAPH_WEAK"
++         CUGRAPH_STRONG "cugraph::cugraph_cc_t::CUGRAPH_STRONG"
++         NUM_CONNECTIVITY_TYPES "cugraph::cugraph_cc_t::NUM_CONNECTIVITY_TYPES"
++ 
+      cdef void connected_components[VT, ET, WT](
+          const GraphCSRView[VT, ET, WT] &graph, cugraph_cc_t connect_type,
+          VT *labels) except +
