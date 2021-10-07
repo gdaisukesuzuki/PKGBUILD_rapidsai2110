@@ -1,0 +1,38 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-nvtx)
+_pkgname=nvtx
+pkgver=0.2.3
+pkgrel=1
+pkgdesc="NVIDIA Tool Extension Library"
+arch=('x86_64')
+url="https://nvidia.github.io/NVTX/doxygen/index.html"
+license=('custom')
+depends=('nvtx' 'cython' 'cuda' 'python-setuptools')
+# depends=('gcc9' 'cython' 'cuda' 'cmake' 'python-numba' 'spdlog')
+# source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git")
+source=("https://files.pythonhosted.org/packages/9f/1c/86a1a246dab624c90cf4346f7334edf4b3428744587a53df8f68a1b3e3e7/nvtx-0.2.3.tar.gz")
+
+sha256sums=('SKIP')
+# sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+
+build() {
+  cd "${srcdir}/${_pkgname}-${pkgver}"
+  # git submodule update --init --remote --recursive
+  # export CUDA_HOME=/opt/cuda
+  python setup.py build
+}
+
+package() {
+  cd "${srcdir}/${_pkgname}-${pkgver}"
+  # export CUDA_HOME=/opt/cuda
+  python setup.py install --prefix=/usr --root="${pkgdir}"  --optimize=1  # --skip-build
+
+  # install -Dm644 ${srcdir}/${_pkgname}-${pkgver}/LICENSE ${pkgdir}/usr/share/licenses/python-nvtx/LICENSE
+}
+
+# vim:set ts=2 sw=2 et:
