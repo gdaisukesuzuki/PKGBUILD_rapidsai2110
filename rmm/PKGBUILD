@@ -1,0 +1,69 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(rmm)
+_pkgname=rmm
+#conflicts=(spdlog)
+# pkgver=0.19.0
+pkgver=21.10
+_pkgver=21.08.01
+#_pkgver=0.19.0
+pkgrel=1
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+# depends=('fmt'  'cython' 'cuda' 'cmake' 'python-numba' 'cudf')
+depends=( 'spdlog'  'cuda' 'cmake'  )
+# depends=('spdlog' 'cython' 'cuda' 'cmake' 'python-numba' 'fmt')
+# depends=('gcc9' 'cython' 'cuda' 'cmake' 'python-numba' 'spdlog')
+# source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git")
+# source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git#branch=branch-${_pkgver}"
+source=("${_pkgname}::git+https://github.com/rapidsai/rmm.git#tag=v21.10.00"
+     "cmake.patch"
+  )
+
+# sha256sums=('SKIP')
+sha256sums=('SKIP' 'SKIP')
+
+build() {
+#  patch -p0 < rmm.patch
+#  patch -p0 < cmake.patch
+  cd "${srcdir}/rmm"
+
+
+  git submodule update --init --remote --recursive
+
+#  ./build.sh -v -n rmm
+}
+
+package() {
+ cd "${srcdir}"/rmm
+        cmake -DCMAKE_INSTALL_PREFIX="/usr" \
+              -DCUDA_STATIC_RUNTIME=oFF \
+              -DBUILD_TESTS=OFF \
+              -DBUILD_BENCHMARKS=OFF \
+              -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+              -DPER_THREAD_DEFAULT_STREAM=OFF \
+              -DCMAKE_BUILD_TYPE=Release -B "${srcdir}"/rmm/build -S .
+cmake --build "${srcdir}"/rmm/build -j$(nproc)
+cmake --build "${srcdir}"/rmm/build  --target install DESTDIR="${pkgdir}"
+#  make DESTDIR="${pkgdir}" install
+#  mkdir -p ${pkgdir}/usr/lib
+#  cd "${srcdir}"/rmm/build
+#  mkdir -p ${pkgdir}/usr/lib/pkgconfig
+#  mkdir -p ${pkgdir}/usr/include
+#  cd "${srcdir}"/rmm
+#  cp -pr include/rmm ${pkgdir}/usr/include
+
+
+
+#  mkdir -p ${pkgdir}/usr/include
+
+  install -Dm644 ${srcdir}/rmm/LICENSE ${pkgdir}/usr/share/licenses/rmm/LICENSE
+  rm -rf ${pkgdir}/home
+}
+
+# vim:set ts=2 sw=2 et:
