@@ -1,0 +1,36 @@
+*** raft/cpp/include/raft/cudart_utils.h-dist	2021-09-14 20:26:38.069566042 +0900
+--- raft/cpp/include/raft/cudart_utils.h	2021-09-14 20:28:54.998817061 +0900
+***************
+*** 207,213 ****
+  void copy(Type* dst, const Type* src, size_t len,
+            rmm::cuda_stream_view stream) {
+    CUDA_CHECK(
+!     cudaMemcpyAsync(dst, src, len * sizeof(Type), cudaMemcpyDefault, stream));
+  }
+  
+  /**
+--- 207,213 ----
+  void copy(Type* dst, const Type* src, size_t len,
+            rmm::cuda_stream_view stream) {
+    CUDA_CHECK(
+!     cudaMemcpyAsync(dst, src, len * sizeof(Type), cudaMemcpyDefault, stream.value()));
+  }
+  
+  /**
+***************
+*** 272,278 ****
+                bool setZero = false) {
+    size_t size = len * sizeof(Type);
+    ptr = (Type*)rmm::mr::get_current_device_resource()->allocate(size, stream);
+!   if (setZero) CUDA_CHECK(cudaMemsetAsync((void*)ptr, 0, size, stream));
+  
+    std::lock_guard<std::mutex> _(mutex_);
+    allocations[ptr] = size;
+--- 272,278 ----
+                bool setZero = false) {
+    size_t size = len * sizeof(Type);
+    ptr = (Type*)rmm::mr::get_current_device_resource()->allocate(size, stream);
+!   if (setZero) CUDA_CHECK(cudaMemsetAsync((void*)ptr, 0, size, stream.value()));
+  
+    std::lock_guard<std::mutex> _(mutex_);
+    allocations[ptr] = size;

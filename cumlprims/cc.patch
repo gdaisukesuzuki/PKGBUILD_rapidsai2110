@@ -1,0 +1,12 @@
+*** include/cumlprims/opg/matrix/part_descriptor.hpp-dist	2021-07-08 19:27:37.567033656 +0900
+--- include/cumlprims/opg/matrix/part_descriptor.hpp	2021-07-08 19:28:00.584187139 +0900
+***************
+*** 16,21 ****
+--- 16,22 ----
+  
+  #pragma once
+  
++ #include <ostream>
+  #include <stdint.h>
+  #include <set>
+  #include <vector>

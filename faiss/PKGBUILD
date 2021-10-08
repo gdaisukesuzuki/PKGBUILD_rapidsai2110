@@ -1,0 +1,80 @@
+# Maintainer: otaj <jasek.ota@gmail.com>
+# If you want the python package to work with MKL, you need to have python-numpy-mkl installed!
+# See https://github.com/facebookresearch/faiss/issues/1393
+
+_pkgname=faiss
+pkgbase=faiss
+pkgname=('faiss' 'python-faiss')
+arch=('i686' 'x86_64')
+url="https://github.com/facebookresearch/faiss"
+license=('MIT')
+pkgver=1.7.1
+pkgrel=3
+options=('staticlibs')
+source=(${_pkgname}::git+https://github.com/facebookresearch/faiss.git#tag=v${pkgver}
+     'cmake.patch')
+sha256sums=('SKIP' 'SKIP')
+depends=('blas' 'lapack' 'openmp' 'cuda' 'intel-mkl' )
+makedepends=('git' 'python' 'python-numpy' 'swig' 'python-setuptools' 'cmake')
+optdepends=('intel-mkl: To use MKL blas implemenetation' 'python-numpy-mkl: To use MKL blas implementation.')
+
+
+prepare() {
+  # patch -p0 < cu.patch
+ patch -p0 < cmake.patch
+  cd "${srcdir}/${_pkgname}"
+  mkdir -p build
+  cd build
+  cmake .. \
+    -DFAISS_ENABLE_GPU=ON \
+    -DFAISS_ENABLE_PYTHON=ON \
+    -DFAISS_ENABLE_C_API=ON \
+    -DBUILD_STATIC_LIBS=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCUDAToolkit_ROOT=/opt/cuda \
+    -DCMAKE_CUDA_ARCHITECTURES="86" \
+    -DMKL_LIBRARIES=/opt/intel/mkl -DBLA_VENDOR=Intel10_64ilp \
+    -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+    -DBUILD_TESTING=OFF \
+    -DFAISS_OPT_LEVEL=avx2 \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE
+}
+
+
+build() {
+  cd "${srcdir}/${_pkgname}/build"
+  export LAPACK_LIBRARIES="/usr/lib/liblapack.so:/usr/lib/liblapacke.so"
+  export CUDAHOSTCXX=/usr/bin/g++-10
+  make -C . -j12 faiss swigfaiss
+  cd faiss/python
+  python setup.py build
+}
+
+package_faiss() {
+  pkgdesc='A library for efficient similarity search and clustering of dense vectors.'
+  provides=('faiss')
+  conflicts=('faiss')
+  cd "${srcdir}/${_pkgname}/build"
+  export LAPACK_LIBRARIES="/usr/lib/liblapack.so:/usr/lib/liblapacke.so"
+  export CUDAHOSTCXX=/usr/bin/g++-10
+  make -j12 DESTDIR="$pkgdir" install
+  cd "${pkgdir}"/usr/lib
+  # ln -fs libfaiss_avx2.a libfaiss.a
+  cd "${srcdir}/${_pkgname}/build"
+  cd ..
+  install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
+
+package_python-faiss() {
+  pkgdesc='A library for efficient similarity search and clustering of dense vectors. Python wrappers'
+  provides=('python-faiss')
+  depends=('python' 'python-numpy' 'faiss')
+
+  cd "${srcdir}/${_pkgname}/build/faiss/python"
+  python setup.py install --root="$pkgdir/" --optimize=1 --skip-build
+  cd ../../..
+  install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
+

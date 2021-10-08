@@ -1,0 +1,115 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-cuml)
+_pkgname=cuml
+pkgver=21.10
+_pkgver=21.08.01
+pkgrel=1
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+depends=('python-treelite' 'python-faiss' 'python-ucx' 'python-cupy' 'python-cudf' 'cuml')
+# depends=('faiss-cuda' 'cudf' 'nccl' 'cuda' 'cmake' 'boost-libs'  'protobuf' 'treelite' 'cumlprims')
+# depends=('arrow-cuda>=1.0.0' 'nccl' 'cuda' 'cmake' 'rmm' 'dlpack' 'boost-libs'  'protobuf' )
+# depends=('arrow-cuda>=1.0.0' 'nccl' 'cuda' 'cuda-tools' 'cuda-static' 'cmake' 'python-rmm' 'dlpack' 'boost-libs'  'protobuf' )
+# depends=('arrow-cuda<1.0.0' 'python-pyarrow-cuda' 'gcc9' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs' 'python-dask'  'python-distributed' 'protobuf' 'python-versioneer')
+# depends=('arrow-cudf<0.16.0' 'gcc8' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs' 'python-dask'  'python-distributed' 'protobuf')
+# makedepends=('python-cmake_setuptools' 'protobuf-static')
+# depends=('arrow-cudf<0.16.0' 'gcc8' 'cuda' 'cmake' 'rapids-rmm' 'dlpack' 'boost-libs')
+# source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git"
+source=("${_pkgname}::git+https://github.com/rapidsai/cuml.git#tag=v21.10.00" "cc.patch" "cu.patch" "setup.py.patch" "cmake.patch"
+"raft.patch"
+)
+# source=("${_pkgname}::git+https://github.com/rapidsai/cuml.git#branch=branch-${_pkgver}" "cc.patch" "cu.patch" "setup.py.patch")
+# source=("${_pkgname}::git+https://github.com/rapidsai/cuml.git#tag=v0.19.0")
+#  "orc.hpp.patch"
+#  "remove_keys.cu.patch"
+#  "from.arrow.cu.patch"
+#  "cudf_setup.py.patch" "gather.cu.patch" "ipc.cpp.patch" "reader_impl.cu.patch")
+#  "cudf_setup.py.patch" "nvst_CMakeLists.txt.patch")
+#  "from_arrow.cpp.patch"
+
+# sha256sums=('SKIP' 'SKIP')
+# sha256sums=('SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'  'SKIP')
+# sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+
+prepare() {
+  cd "${srcdir}"
+patch -p0 < cu.patch
+patch -p0 < cc.patch
+patch -p0 < setup.py.patch
+patch -p0 < cmake.patch
+# patch -p0 < raft.patch
+#   patch -p0 < nvst_CMakeLists.txt.patch
+#   patch -p0 < gather.cu.patch 
+#   patch -p0 < orc.hpp.patch 
+#  patch -p0 < cpp.patch
+#  patch -p0 < cudf_setup.py.patch
+#  patch -p0 < from_arrow.cpp.patch
+#   patch -p0 < reader_impl.cu.patch
+#   patch -p0 <  from.arrow.cu.patch
+#    patch -p0 < ipc.cpp.patch
+export ENABLE_CUMLPRIMS_MG=OFF
+export SINGLEGPU=OFF
+export VERBOSE=1
+export BUILD_TYPE=Release
+export INSTALL_TARGET=install
+export BUILD_ALL_GPU_ARCH=0
+export CUML_EXTRA_PYTHON_ARGS=""
+export NVTX=ON
+export CCACHE=OFF
+export CLEAN=0
+export BUILD_DISABLE_DEPRECATION_WARNING=ON
+export BUILD_CUML_STD_COMMS=ON
+export BUILD_CPP_MG_TESTS=OFF
+export BUILD_CPP_TESTS=OFF
+export BUILD_STATIC_FAISS=OFF
+export CMAKE_GENERATOR="Ninja"
+export SINGLEGPU_CPP_FLAG=OFF
+export LIBCUML_BUILD_DIR="${srcdir}"/cuml/cpp/build
+export CUML_EXTRA_CMAKE_ARGS=""
+export INSTALL_PREFIX=/usr
+export PARALLEL_LEVEL=$(nproc)
+export CUDA_HOME=/opt/cuda
+export CMAKE_LOG_LEVEL=true
+# export CC=/usr/bin/gcc-10
+# export CXX=/usr/bin/g++-10
+# export RAFT_PATH=${srcdir}/raft
+  
+ find cuml/python/cuml -name '*.py' | xargs sed -i -e 's/cp.core.core.ndarray/cp._core.core.ndarray/g'
+ find cuml/python/cuml -name '*.py' | xargs sed -i -e 's/sklearn.manifold.t_sne/sklearn.manifold/g'
+
+}
+
+build() {
+  cd "${srcdir}/cuml"
+  # ./build.sh clean
+#  ./build.sh --disable_nvtx -v -n libcudf cudf dask_cudf
+
+    export GPU_ARCH=""
+
+}
+
+
+package_python-cuml()
+{
+  depends=( 'python-cudf' 'python-treelite' 'python-cupy')
+  # depends=('python-faiss-cuda' 'python-cudf' 'python-treelite' 'python-cupy')
+  cd "${srcdir}/cuml/python"
+  
+  CMAKE_CUDA_HOST_COMPILER=/usr/bin/g++-10 \
+  CUDA_HOME=/opt/cuda LD_LIBRARY_PATH=/opt/cuda/lib64:${LD_LIBRARY_PATH} python setup.py build_ext -j${PARALLEL_LEVEL:-1} ${CUML_EXTRA_PYTHON_ARGS} install --single-version-externally-managed --record=record.txt --prefix=/usr --root="${pkgdir}"
+
+  # install -Dm644 ${srcdir}/cudf/cpp/src/utilities/legacy/*.hpp ${pkgdir}/usr/include/cudf/utilities/legacy/
+  install -Dm644 ${srcdir}/cuml/LICENSE ${pkgdir}/usr/share/licenses/python-cuml/LICENSE
+
+}
+
+
+# vim:set ts=2 sw=2 et:

@@ -1,0 +1,41 @@
+*** cuml/python/setup.py-dist	2021-08-04 23:26:19.434606791 +0900
+--- cuml/python/setup.py	2021-08-04 23:28:48.687328829 +0900
+***************
+*** 151,157 ****
+          # object has all the args used by the user, we can check that.
+          self.singlegpu = '--singlegpu' in self.distribution.script_args
+  
+!         libs = ['cuml++', 'cudart', 'cusparse', 'cusolver']
+  
+          include_dirs = [
+              '../cpp/src',
+--- 151,161 ----
+          # object has all the args used by the user, we can check that.
+          self.singlegpu = '--singlegpu' in self.distribution.script_args
+  
+!         libs = ['cuml++', 'cuda', 'cudart',
+!                 'cublas', 'cublasLt', 'cufft', 'cufftw', 'cuinj64',
+!                  'curand', 'cusolver', 'cusolverMg', 'cusparse',
+!                  'treelite', 'fmt']
+! 
+  
+          include_dirs = [
+              '../cpp/src',
+***************
+*** 265,271 ****
+            "Intended Audience :: Developers",
+            "Programming Language :: Python",
+            "Programming Language :: Python :: 3.7",
+!           "Programming Language :: Python :: 3.8"
+        ],
+        author="NVIDIA Corporation",
+        setup_requires=['cython'],
+--- 269,276 ----
+            "Intended Audience :: Developers",
+            "Programming Language :: Python",
+            "Programming Language :: Python :: 3.7",
+!           "Programming Language :: Python :: 3.8",
+!           "Programming Language :: Python :: 3.9"
+        ],
+        author="NVIDIA Corporation",
+        setup_requires=['cython'],

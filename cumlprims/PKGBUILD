@@ -1,0 +1,36 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Maintainer: Konstantin Gizdov <arch@kge.pw>
+pkgname=cumlprims
+pkgver=21.10
+pkgrel=1
+pkgdesc=""
+arch=('x86_64')
+url="https://anaconda.org/rapidsai-nightly/libcumlprims/files"
+license=('custom:NVIDIA')
+depends=('cuda' 'cudf')
+# options=(!strip staticlibs)
+# source=(https://anaconda.org/nvidia/libcumlprims/0.19.0/download/linux-64/libcumlprims-0.19.0-cuda11.2_ga2abf9f_0.tar.bz2)
+# source=(https://anaconda.org/nvidia/libcumlprims/21.06.00/download/linux-64/libcumlprims-21.06.00-cuda11.2_gfda2e6c_0.tar.bz2
+# source=(https://anaconda.org/rapidsai-nightly/libcumlprims/21.08.00a210804/download/linux-64/libcumlprims-21.08.00a210804-cuda11.4_g4db0971_5.tar.bz2
+source=(
+https://anaconda.org/nvidia/libcumlprims/21.10.00/download/linux-64/libcumlprims-21.10.00-cuda11.4_g167dc59_0.tar.bz2
+"cc.patch" )
+sha512sums=('SKIP' 'SKIP')
+
+
+package() {
+  patch -p0 < cc.patch
+  local _predir="${srcdir}"
+  cd ${_predir}
+  mkdir -p "${pkgdir}/usr/lib"
+  mkdir -p "${pkgdir}/usr/include"
+  cp -alr include/*  "${pkgdir}/usr/include"
+  cp -alr lib/*  "${pkgdir}/usr/lib"
+  rm -rf "${pkgdir}/usr/lib/cmake/rmm"
+  rm -rf "${pkgdir}/usr/lib/cmake/cuco"
+  rm -rf "${pkgdir}/usr/lib/cmake/raft"
+  rm -rf "${pkgdir}/usr/include/rmm"
+  rm -rf "${pkgdir}/usr/include/cuco"
+  rm -rf "${pkgdir}/usr/include/raft"
+  chmod +x "${pkgdir}/usr/lib/libcumlprims.so"
+}

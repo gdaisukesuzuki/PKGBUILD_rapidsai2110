@@ -1,0 +1,44 @@
+*** cuml/cpp/cmake/thirdparty/get_faiss.cmake-dist	2021-08-02 20:45:01.430755255 +0900
+--- cuml/cpp/cmake/thirdparty/get_faiss.cmake	2021-08-02 20:46:10.118868674 +0900
+***************
+*** 21,27 ****
+  
+      rapids_find_generate_module(FAISS
+          HEADER_NAMES  faiss/IndexFlat.h
+!         LIBRARY_NAMES faiss
+      )
+  
+      rapids_cpm_find(FAISS ${PKG_VERSION}
+--- 21,27 ----
+  
+      rapids_find_generate_module(FAISS
+          HEADER_NAMES  faiss/IndexFlat.h
+!         LIBRARY_NAMES faiss_avx2
+      )
+  
+      rapids_cpm_find(FAISS ${PKG_VERSION}
+***************
+*** 35,40 ****
+--- 35,41 ----
+              "CUDAToolkit_ROOT ${CUDAToolkit_LIBRARY_DIR}"
+              "FAISS_ENABLE_GPU ON"
+              "BUILD_TESTING OFF"
++ 	    "FAISS_OPT_LEVEL avx2"
+              "CMAKE_MESSAGE_LOG_LEVEL VERBOSE"
+      )
+  
+***************
+*** 45,50 ****
+  
+  endfunction()
+  
+! find_and_configure_faiss(VERSION    1.7.0
+!                          PINNED_TAG  bde7c0027191f29c9dadafe4f6e68ca0ee31fb30
+                          )
+--- 46,51 ----
+  
+  endfunction()
+  
+! find_and_configure_faiss(VERSION    1.7.1
+!                          PINNED_TAG  cff072b78ef019998990c6ba02df83dd7d3c8d38
+                          )
