@@ -1,0 +1,46 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-cuxfilter)
+_pkgname=cuxfilter
+pkgver=21.10
+_pkgver=21.10
+pkgrel=1
+pkgdesc="RAPIDS ML"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+depends=('python-cudf' 'python-bokeh' 'python-panel' 'python-fiona' 'python-pyppeteer' 'python-datashader' 'python-pydeck')
+# source=("${_pkgname}::git+https://github.com/rapidsai/cusignal.git")
+# source=("${_pkgname}::git+https://github.com/rapidsai/cusignal.git#branch=branch-${_pkgver}")
+source=("${_pkgname}::git+https://github.com/rapidsai/cuxfilter.git#tag=v21.10.00")
+#  "windows.py.patch" "spectral.py.patch" )
+
+# sha256sums=('SKIP')
+# sha256sums=('SKIP' 'SKIP')
+sha256sums=('SKIP')
+
+
+build() {
+  cd "${srcdir}"
+  # patch -p0 < windows.py.patch
+  # patch -p0 < spectral.py.patch
+
+  cd "${srcdir}/cuxfilter"
+  git submodule update --init --remote --recursive
+
+  ./build.sh -v -n
+
+
+}
+
+package() {
+  cd "${srcdir}"/cuxfilter/python
+  python setup.py install --single-version-externally-managed  --prefix=/usr --root="${pkgdir}" --optimize=1
+
+  install -Dm644 ${srcdir}/cuxfilter/LICENSE ${pkgdir}/usr/share/licenses/${pkgname}/LICENSE
+}
+
+# vim:set ts=2 sw=2 et:
