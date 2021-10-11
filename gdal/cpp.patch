@@ -1,0 +1,36 @@
+*** frmts/pdf/pdfdataset.cpp-dist	2021-10-11 21:59:23.219481165 +0900
+--- frmts/pdf/pdfdataset.cpp	2021-10-11 22:08:10.909306692 +0900
+***************
+*** 4982,4988 ****
+  #ifdef HAVE_POPPLER
+    if (bUseLib.test(PDFLIB_POPPLER))
+    {
+!     GooString* poMetadata = poCatalogPoppler->readMetadata();
+      if (poMetadata)
+      {
+  #if (POPPLER_MAJOR_VERSION >= 1 || POPPLER_MINOR_VERSION >= 72)
+--- 4982,4988 ----
+  #ifdef HAVE_POPPLER
+    if (bUseLib.test(PDFLIB_POPPLER))
+    {
+! 	  std::unique_ptr<GooString> poMetadata = poCatalogPoppler->readMetadata();
+      if (poMetadata)
+      {
+  #if (POPPLER_MAJOR_VERSION >= 1 || POPPLER_MINOR_VERSION >= 72)
+***************
+*** 4996,5002 ****
+              const char * const apszMDList[2] = { pszContent, nullptr };
+              poDS->SetMetadata(const_cast<char**>(apszMDList), "xml:XMP");
+          }
+!         delete poMetadata;
+      }
+  
+      /* Read Info object */
+--- 4996,5002 ----
+              const char * const apszMDList[2] = { pszContent, nullptr };
+              poDS->SetMetadata(const_cast<char**>(apszMDList), "xml:XMP");
+          }
+!         poMetadata.reset();
+      }
+  
+      /* Read Info object */

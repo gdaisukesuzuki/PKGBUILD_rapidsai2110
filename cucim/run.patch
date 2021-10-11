@@ -1,0 +1,62 @@
+*** cucim/run-dist	2021-10-06 15:26:18.055236458 +0900
+--- cucim/run	2021-10-06 15:29:52.312616718 +0900
+***************
+*** 273,278 ****
+--- 273,279 ----
+          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+          -DCMAKE_PREFIX_PATH=${prefix} \
+          -DCMAKE_BUILD_TYPE=${build_type_str} \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+          -DCMAKE_INSTALL_PREFIX=${source_folder}/install
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target cucim -- -j $(nproc)
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target install -- -j $(nproc)
+***************
+*** 294,299 ****
+--- 295,301 ----
+          -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+          -DCMAKE_BUILD_TYPE=${build_type_str} \
+          -DCMAKE_PREFIX_PATH=${prefix} \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+          -DCMAKE_INSTALL_PREFIX=${source_folder}/install
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target cucim.kit.cuslide -- -j $(nproc)
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target install -- -j $(nproc)
+***************
+*** 321,326 ****
+--- 323,329 ----
+          -DCMAKE_INSTALL_PREFIX=${source_folder}/install \
+          -DPYTHON_EXECUTABLE=$(which python3) \
+          -DPYTHON_LIBRARY=${python_library} \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+          -DPYTHON_INCLUDE_DIR=${python_include_dir}
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target cucim -- -j $(nproc)
+      ${CMAKE_CMD} --build ${build_folder} --config ${build_type_str} --target install -- -j $(nproc)
+***************
+*** 519,524 ****
+--- 522,528 ----
+      # Build libcucim
+      ${CMAKE_CMD} -S ${SRC_ROOT} -B ${BUILD_ROOT}/libcucim \
+          -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+          -DCMAKE_INSTALL_PREFIX=${CUCIM_SDK_PATH}/install
+      ${CMAKE_CMD} --build ${BUILD_ROOT}/libcucim --config ${CMAKE_BUILD_TYPE} --target cucim -- -j ${NUM_THREADS}
+      ${CMAKE_CMD} --build ${BUILD_ROOT}/libcucim --config ${CMAKE_BUILD_TYPE} --target install -- -j ${NUM_THREADS}
+***************
+*** 527,532 ****
+--- 531,537 ----
+      ${CMAKE_CMD} -S ${SRC_ROOT}/cpp/plugins/cucim.kit.cuslide -B ${BUILD_ROOT}/cuslide \
+          -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+          -DCMAKE_INSTALL_PREFIX=${BUILD_ROOT}/cuslide/install \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+          -DCUCIM_SDK_PATH=${CUCIM_SDK_PATH}
+      ${CMAKE_CMD} --build ${BUILD_ROOT}/cuslide --config ${CMAKE_BUILD_TYPE} --target cucim.kit.cuslide -- -j ${NUM_THREADS}
+      ${CMAKE_CMD} --build ${BUILD_ROOT}/cuslide --config ${CMAKE_BUILD_TYPE} --target install -- -j ${NUM_THREADS}
+***************
+*** 546,551 ****
+--- 551,557 ----
+              -DCUCIM_SDK_PATH=${CUCIM_SDK_PATH} \
+              -DPYTHON_EXECUTABLE=${PYBIN}/python3 \
+              -DPYTHON_LIBRARY=${python_library} \
++ 	-DCMAKE_CUDA_ARCHITECTURES=86 \
+              -DPYTHON_INCLUDE_DIR=${python_include_dir}
+          ${CMAKE_CMD} --build ${BUILD_ROOT}/cucim --config ${CMAKE_BUILD_TYPE} --target cucim -- -j ${NUM_THREADS}
+          ${CMAKE_CMD} --build ${BUILD_ROOT}/cucim --config ${CMAKE_BUILD_TYPE} --target install -- -j ${NUM_THREADS}
