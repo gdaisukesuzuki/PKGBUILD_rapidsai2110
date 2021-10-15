@@ -10,7 +10,7 @@ arch=(x86_64)
 url="https://arrow.apache.org"
 license=(Apache)
 depends=(boost-libs brotli double-conversion c-ares gflags
-         google-glog libutf8proc lz4 protobuf rapidjson
+         google-glog libutf8proc lz4 protobuf rapidjson apache-orc
          snappy thrift uriparser zstd re2)
 provides=(parquet-cpp arrow)
 conflicts=(parquet-cpp arrow)
