@@ -39,3 +39,41 @@
         ],
         author="NVIDIA Corporation",
         setup_requires=['cython'],
+*** cuml/python/cuml/test/test_hdbscan.py-dist	2021-10-15 23:53:45.714156870 +0900
+--- cuml/python/cuml/test/test_hdbscan.py	2021-10-16 00:29:26.215673998 +0900
+***************
+*** 150,157 ****
+                         max_cluster_size,
+                         min_samples):
+  
+!     X, y = make_blobs(int(nrows),
+!                       ncols,
+                        nclusters,
+                        cluster_std=0.7,
+                        shuffle=False,
+--- 150,156 ----
+                         max_cluster_size,
+                         min_samples):
+  
+!     X, y = make_blobs(nrows * ncols,
+                        nclusters,
+                        cluster_std=0.7,
+                        shuffle=False,
+***************
+*** 429,436 ****
+  
+  def test_hdbscan_plots():
+  
+!     X, y = make_blobs(int(100),
+!                       100,
+                        10,
+                        cluster_std=0.7,
+                        shuffle=False,
+--- 428,434 ----
+  
+  def test_hdbscan_plots():
+  
+!     X, y = make_blobs(100 * 100,
+                        10,
+                        cluster_std=0.7,
+                        shuffle=False,
