@@ -1,0 +1,68 @@
+# Maintainer: Sven-Hendrik Haase <svenstaro@gmail.com>
+# Contributor: bartus <arch-user-repoᘓbartus.33mail.com>
+# Contributor: pingplug <pingplug@foxmail.com>
+# Contributor: cornholio <vigo.the.unholy.carpathian@gmail.com>
+
+pkgname=(python-tsnecuda)
+_pkgname=tsne-cuda
+pkgver=3.0.0
+_pkgver=3.0.0
+pkgrel=0
+pkgdesc="RAPIDS Memory Manager"
+arch=('x86_64')
+url="https://rapids.ai/"
+license=('custom')
+depends=('cython' 'cmake' 'python-faiss' 'cuda')
+# source=("${_pkgname}::git+https://github.com/rapidsai/cudf.git"
+source=("${_pkgname}::git+https://github.com/CannyLab/tsne-cuda.git#tag=3.0.0"
+"CMake.patch"
+)
+# source=("${_pkgname}::git+https://github.com/rapidsai/cuml.git#branch=branch-${_pkgver}" "cc.patch" "cu.patch" "setup.py.patch")
+# source=("${_pkgname}::git+https://github.com/rapidsai/cuml.git#tag=v0.19.0")
+#  "orc.hpp.patch"
+#  "remove_keys.cu.patch"
+#  "from.arrow.cu.patch"
+#  "cudf_setup.py.patch" "gather.cu.patch" "ipc.cpp.patch" "reader_impl.cu.patch")
+#  "cudf_setup.py.patch" "nvst_CMakeLists.txt.patch")
+#  "from_arrow.cpp.patch"
+
+sha256sums=('SKIP' 'SKIP')
+# sha256sums=('SKIP')
+# sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP'  'SKIP')
+# sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+
+prepare() {
+  cd "${srcdir}/${_pkgname}"
+  git submodule init
+git submodule update
+
+}
+
+build() {
+  patch -p0 < CMake.patch
+  cd "${srcdir}/${_pkgname}"
+  mkdir build && cd build
+  cmake .. \
+  -DBUILD_PYTHON=ON -WITH_MKL=ON \
+  -DCMAKE_CXX_COMPILER=/usr/bin/g++ \
+  -DCMAKE_C_COMPILER=/usr/bin/gcc \
+  -DBUILD_TEST=TRUE
+  make -j12
+
+}
+
+
+package()
+{
+  cd "${srcdir}/${_pkgname}/build"
+  # make  install DESTDIR="${pkgdir}/usr"
+
+  cd "${srcdir}/${_pkgname}/build/python"
+  python setup.py build_ext -j12 install --single-version-externally-managed --record=record.txt --prefix=/usr --root="${pkgdir}"
+  install -Dm644 ${srcdir}/${_pkgname}/LICENSE ${pkgdir}/usr/share/licenses/${pkgname}/LICENSE
+
+}
+
+
+# vim:set ts=2 sw=2 et:
